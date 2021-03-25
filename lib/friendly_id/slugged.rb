@@ -67,7 +67,7 @@ app's behavior and requirements.
 #### Formatting
 
 By default, FriendlyId uses Active Support's
-[paramaterize](http://api.rubyonrails.org/classes/ActiveSupport/Inflector.html#method-i-parameterize)
+[parameterize](http://api.rubyonrails.org/classes/ActiveSupport/Inflector.html#method-i-parameterize)
 method to create slugs. This method will intelligently replace spaces with
 dashes, and Unicode Latin characters with ASCII approximations:
 
@@ -84,7 +84,9 @@ FriendlyId uses.
 Here's an example of a class that uses a custom method to generate the slug:
 
     class Person < ActiveRecord::Base
-      friendly_id :name_and_location
+      extend FriendlyId
+      friendly_id :name_and_location, use: :slugged
+
       def name_and_location
         "#{name} from #{location}"
       end
@@ -186,7 +188,7 @@ control exactly when new friendly ids are set:
       end
     end
 
-If you want to extend the default behavior but, adding your own conditions,
+If you want to extend the default behavior but add your own conditions,
 don't forget to invoke `super` from your implementation:
 
     class Category < ActiveRecord::Base
@@ -246,6 +248,8 @@ Github issue](https://github.com/norman/friendly_id/issues/185) for discussion.
         defaults[:sequence_separator] ||= '-'
       end
       model_class.before_validation :set_slug
+      model_class.before_save :set_slug
+      model_class.after_validation :unset_slug_if_invalid
     end
 
     # Process the given value to make it suitable for use as a slug.
@@ -260,6 +264,7 @@ Github issue](https://github.com/norman/friendly_id/issues/185) for discussion.
     # ### Example
     #
     #     class Person < ActiveRecord::Base
+    #       extend FriendlyId
     #       friendly_id :name_and_location
     #
     #       def name_and_location
@@ -284,7 +289,9 @@ Github issue](https://github.com/norman/friendly_id/issues/185) for discussion.
     # @param [#to_s] value The value used as the basis of the slug.
     # @return The candidate slug text, without a sequence.
     def normalize_friendly_id(value)
-      value.to_s.parameterize
+      value = value.to_s.parameterize
+      value = value[0...friendly_id_config.slug_limit] if friendly_id_config.slug_limit
+      value
     end
 
     # Whether to generate a new slug.
@@ -295,9 +302,55 @@ Github issue](https://github.com/norman/friendly_id/issues/185) for discussion.
       send(friendly_id_config.slug_column).nil? && !send(friendly_id_config.base).nil?
     end
 
+    # Public: Resolve conflicts.
+    #
+    # This method adds UUID to first candidate and truncates (if `slug_limit` is set).
+    #
+    # Examples:
+    #
+    #   resolve_friendly_id_conflict(['12345'])
+    #   # => '12345-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+    #
+    #   FriendlyId.defaults { |config| config.slug_limit = 40 }
+    #   resolve_friendly_id_conflict(['12345'])
+    #   # => '123-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+    #
+    # candidates - the Array with candidates.
+    #
+    # Returns the String with new slug.
     def resolve_friendly_id_conflict(candidates)
-      [candidates.first, SecureRandom.uuid].compact.join(friendly_id_config.sequence_separator)
+      uuid = SecureRandom.uuid
+      [
+        apply_slug_limit(candidates.first, uuid),
+        uuid
+      ].compact.join(friendly_id_config.sequence_separator)
     end
+
+    # Private: Apply slug limit to candidate.
+    #
+    # candidate - the String with candidate.
+    # uuid      - the String with UUID.
+    #
+    # Return the String with truncated candidate.
+    def apply_slug_limit(candidate, uuid)
+      return candidate unless candidate && friendly_id_config.slug_limit
+
+      candidate[0...candidate_limit(uuid)]
+    end
+    private :apply_slug_limit
+
+    # Private: Get max length of candidate.
+    #
+    # uuid - the String with UUID.
+    #
+    # Returns the Integer with max length.
+    def candidate_limit(uuid)
+      [
+        friendly_id_config.slug_limit - uuid.size - friendly_id_config.sequence_separator.size,
+        0
+      ].max
+    end
+    private :candidate_limit
 
     # Sets the slug.
     def set_slug(normalized_slug = nil)
@@ -318,15 +371,23 @@ Github issue](https://github.com/norman/friendly_id/issues/185) for discussion.
     private :scope_for_slug_generator
 
     def slug_generator
-      friendly_id_config.slug_generator_class.new(scope_for_slug_generator)
+      friendly_id_config.slug_generator_class.new(scope_for_slug_generator, friendly_id_config)
     end
     private :slug_generator
 
-    # This module adds the `:slug_column`, and `:sequence_separator`, and
-    # `:slug_generator_class` configuration options to
+    def unset_slug_if_invalid
+      if errors.key?(friendly_id_config.query_field) && attribute_changed?(friendly_id_config.query_field.to_s)
+        diff = changes[friendly_id_config.query_field]
+        send "#{friendly_id_config.slug_column}=", diff.first
+      end
+    end
+    private :unset_slug_if_invalid
+
+    # This module adds the `:slug_column`, and `:slug_limit`, and `:sequence_separator`,
+    # and `:slug_generator_class` configuration options to
     # {FriendlyId::Configuration FriendlyId::Configuration}.
     module Configuration
-      attr_writer :slug_column, :sequence_separator
+      attr_writer :slug_column, :slug_limit, :sequence_separator
       attr_accessor :slug_generator_class
 
       # Makes FriendlyId use the slug column for querying.
@@ -348,6 +409,11 @@ Github issue](https://github.com/norman/friendly_id/issues/185) for discussion.
       # The column that will be used to store the generated slug.
       def slug_column
         @slug_column ||= defaults[:slug_column]
+      end
+
+      # The limit that will be used for slug.
+      def slug_limit
+        @slug_limit ||= defaults[:slug_limit]
       end
     end
   end

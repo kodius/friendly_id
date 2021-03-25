@@ -1,14 +1,14 @@
 require "helper"
 
-class Manual < ActiveRecord::Base
-  extend FriendlyId
-  friendly_id :name, :use => [:slugged, :history]
-end
-
-class HistoryTest < Minitest::Test
+class HistoryTest < TestCaseClass
 
   include FriendlyId::Test
   include FriendlyId::Test::Shared::Core
+
+  class Manual < ActiveRecord::Base
+    extend FriendlyId
+    friendly_id :name, :use => [:slugged, :history]
+  end
 
   def model_class
     Manual
@@ -65,8 +65,7 @@ class HistoryTest < Minitest::Test
   test "should not be read only when found by slug" do
     with_instance_of(model_class) do |record|
       refute model_class.friendly.find(record.friendly_id).readonly?
-      assert record.update_attribute :name, 'foo'
-      assert record.update_attributes name: 'foo'
+      assert record.update name: 'foo'
     end
   end
 
@@ -93,6 +92,28 @@ class HistoryTest < Minitest::Test
     end
   end
 
+  test 'should maintain history even if current slug is not the most recent one' do
+    with_instance_of(model_class) do |record|
+      record.name = 'current'
+      assert record.save
+
+      # this feels like a hack. only thing i can get to work with the HistoryTestWithSti
+      # test cases. (Editorialist vs Journalist.)
+      sluggable_type = FriendlyId::Slug.first.sluggable_type
+      # create several slugs for record
+      # current slug does not have max id
+      FriendlyId::Slug.delete_all
+      FriendlyId::Slug.create(sluggable_type: sluggable_type, sluggable_id: record.id, slug: 'current')
+      FriendlyId::Slug.create(sluggable_type: sluggable_type, sluggable_id: record.id, slug: 'outdated')
+
+      record.reload
+      record.slug = nil
+      assert record.save
+
+      assert_equal 2, FriendlyId::Slug.count
+    end
+  end
+
   test "should not create new slugs that match old slugs" do
     transaction do
       first_record = model_class.create! :name => "foo"
@@ -109,11 +130,24 @@ class HistoryTest < Minitest::Test
       first_record = model_class.create! :name => "foo"
       second_record = model_class.create! :name => 'another'
 
-      second_record.update_attributes :name => 'foo', :slug => nil
+      second_record.update :name => 'foo', :slug => nil
       assert_match(/foo-.*/, second_record.slug)
 
-      first_record.update_attributes :name => 'another', :slug => nil
+      first_record.update :name => 'another', :slug => nil
       assert_match(/another-.*/, first_record.slug)
+    end
+  end
+
+  test "should prefer product that used slug most recently" do
+    transaction do
+      first_record = model_class.create! name: "foo"
+      second_record = model_class.create! name: "bar"
+
+      first_record.update! slug: "not_foo"
+      second_record.update! slug: "foo" #now both records have used foo; second_record most recently
+      second_record.update! slug: "not_bar"
+
+      assert_equal model_class.friendly.find("foo"), second_record
     end
   end
 
@@ -159,6 +193,76 @@ class HistoryTestWithAutomaticSlugRegeneration < HistoryTest
   end
 end
 
+class DependentDestroyTest < TestCaseClass
+
+  include FriendlyId::Test
+
+  class FalseManual < ActiveRecord::Base
+    self.table_name = 'manuals'
+
+    extend FriendlyId
+    friendly_id :name, :use => :history, :dependent => false
+  end
+
+  class DefaultManual < ActiveRecord::Base
+    self.table_name = 'manuals'
+
+    extend FriendlyId
+    friendly_id :name, :use => :history
+  end
+
+  test 'should allow disabling of dependent destroy' do
+    transaction do
+      assert FriendlyId::Slug.find_by_slug('foo').nil?
+      l = FalseManual.create! :name => 'foo'
+      assert FriendlyId::Slug.find_by_slug('foo').present?
+      l.destroy
+      assert FriendlyId::Slug.find_by_slug('foo').present?
+    end
+  end
+
+  test 'should dependently destroy by default' do
+    transaction do
+      assert FriendlyId::Slug.find_by_slug('baz').nil?
+      l = DefaultManual.create! :name => 'baz'
+      assert FriendlyId::Slug.find_by_slug('baz').present?
+      l.destroy
+      assert FriendlyId::Slug.find_by_slug('baz').nil?
+    end
+  end
+end
+
+if ActiveRecord::VERSION::STRING >= '5.0'
+  class HistoryTestWithParanoidDeletes < HistoryTest
+    class ParanoidRecord < ActiveRecord::Base
+      extend FriendlyId
+      friendly_id :name, :use => :history, :dependent => false
+
+      default_scope { where(deleted_at: nil) }
+    end
+
+    def model_class
+      ParanoidRecord
+    end
+
+    test 'slug should have a sluggable even when soft deleted by a library' do
+      transaction do
+        assert FriendlyId::Slug.find_by_slug('paranoid').nil?
+        record = model_class.create(name: 'paranoid')
+        assert FriendlyId::Slug.find_by_slug('paranoid').present?
+
+        record.update deleted_at: Time.now
+
+        orphan_slug = FriendlyId::Slug.find_by_slug('paranoid')
+        assert orphan_slug.present?, 'Orphaned slug should exist'
+
+        assert orphan_slug.valid?, "Errors: #{orphan_slug.errors.full_messages}"
+        assert orphan_slug.sluggable.present?, 'Orphaned slug should still find corresponding paranoid sluggable'
+      end
+    end
+  end
+end
+
 class HistoryTestWithSti < HistoryTest
   class Journalist < ActiveRecord::Base
     extend FriendlyId
@@ -196,10 +300,40 @@ class HistoryTestWithFriendlyFinders < HistoryTest
         begin
           assert model_class.find(old_friendly_id)
           assert model_class.exists?(old_friendly_id), "should exist? by old id for #{model_class.name}"
-        rescue ActiveRecord::RecordNotFound => e
+        rescue ActiveRecord::RecordNotFound
           flunk "Could not find record by old id for #{model_class.name}"
         end
       end
+    end
+  end
+end
+
+class HistoryTestWithFindersBeforeHistory < HistoryTest
+  class Novelist < ActiveRecord::Base
+    has_many :novels
+  end
+
+  class Novel < ActiveRecord::Base
+    extend FriendlyId
+
+    belongs_to :novelist
+
+    friendly_id :name, :use => [:finders, :history]
+
+    def should_generate_new_friendly_id?
+      slug.blank? || name_changed?
+    end
+  end
+
+  test "should be findable by old slug through has_many association" do
+    transaction do
+      novelist = Novelist.create!(:name => "Stephen King")
+      novel = novelist.novels.create(:name => "Rita Hayworth and Shawshank Redemption")
+      slug = novel.slug
+      novel.name = "Shawshank Redemption"
+      novel.save!
+      assert_equal novel, Novel.find(slug)
+      assert_equal novel, novelist.novels.find(slug)
     end
   end
 end
@@ -214,7 +348,7 @@ class Restaurant < ActiveRecord::Base
   friendly_id :name, :use => [:scoped, :history], :scope => :city
 end
 
-class ScopedHistoryTest < Minitest::Test
+class ScopedHistoryTest < TestCaseClass
   include FriendlyId::Test
   include FriendlyId::Test::Shared::Core
 
@@ -260,6 +394,33 @@ class ScopedHistoryTest < Minitest::Test
 
         third_record = model_class.create! :city => city, :name => 'y'
         assert_match(/y-.+/, third_record.friendly_id)
+      end
+    end
+  end
+
+  test "should record history when scope changes" do
+    transaction do
+      city1 = City.create!
+      city2 = City.create!
+      with_instance_of(Restaurant) do |record|
+        record.name = "x"
+        record.slug = nil
+
+        record.city = city1
+        record.save!
+        assert_equal("city_id:#{city1.id}", record.slugs.reload.first.scope)
+        assert_equal("x", record.slugs.reload.first.slug)
+
+        record.city = city2
+        record.save!
+        assert_equal("city_id:#{city2.id}", record.slugs.reload.first.scope)
+
+        record.name = "y"
+        record.slug = nil
+        record.city = city1
+        record.save!
+        assert_equal("city_id:#{city1.id}", record.slugs.reload.first.scope)
+        assert_equal("y", record.slugs.reload.first.slug)
       end
     end
   end

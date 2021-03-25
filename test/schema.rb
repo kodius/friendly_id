@@ -2,7 +2,14 @@ require "friendly_id/migration"
 
 module FriendlyId
   module Test
-    class Schema < ActiveRecord::Migration
+    migration_class =
+      if ActiveRecord::VERSION::MAJOR >= 5
+        ActiveRecord::Migration[4.2]
+      else
+        ActiveRecord::Migration
+      end
+
+    class Schema < migration_class
       class << self
         def down
           CreateFriendlyIdSlugs.down
@@ -34,17 +41,22 @@ module FriendlyId
 
           slugged_tables.each do |table_name|
             add_column table_name, :slug, :string
-            add_index  table_name, :slug, :unique => true
+            add_index  table_name, :slug, :unique => true if 'novels' != table_name
           end
 
           scoped_tables.each do |table_name|
             add_column table_name, :slug, :string
           end
 
+          paranoid_tables.each do |table_name|
+            add_column table_name, :slug, :string
+            add_column table_name, :deleted_at, :datetime
+            add_index table_name, :deleted_at
+          end
+
           # This will be used to test scopes
           add_column :novels, :novelist_id, :integer
           add_column :novels, :publisher_id, :integer
-          remove_index :novels, :slug
           add_index :novels, [:slug, :publisher_id, :novelist_id], :unique => true
 
           # This will be used to test column name quoting
@@ -57,6 +69,7 @@ module FriendlyId
           add_column :journalists, "slug_en", :string
           add_column :journalists, "slug_es", :string
           add_column :journalists, "slug_de", :string
+          add_column :journalists, "slug_fr_ca", :string
 
           # This will be used to test relationships
           add_column :books, :author_id, :integer
@@ -67,6 +80,9 @@ module FriendlyId
           # Used to test candidates
           add_column :cities, :code, :string, :limit => 3
 
+          # Used as a non-default slug_column
+          add_column :authors, :subdomain, :string
+
           @done = true
         end
 
@@ -74,6 +90,10 @@ module FriendlyId
 
         def slugged_tables
           %w[journalists articles novelists novels manuals cities]
+        end
+
+        def paranoid_tables
+          ["paranoid_records"]
         end
 
         def tables_with_uuid_primary_key
@@ -89,7 +109,7 @@ module FriendlyId
         end
 
         def tables
-          simple_tables + slugged_tables + scoped_tables
+          simple_tables + slugged_tables + scoped_tables + paranoid_tables
         end
       end
     end

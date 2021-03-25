@@ -2,12 +2,14 @@ source 'https://rubygems.org'
 
 gemspec path: '../'
 
+gem 'activerecord', '~> 5.2.0'
+gem 'railties', '~> 5.2.0'
+
 # Database Configuration
 group :development, :test do
   platforms :jruby do
-    gem 'activerecord-jdbcsqlite3-adapter', '>= 1.3.0.beta2'
-    gem 'activerecord-jdbcmysql-adapter', '>= 1.3.0.beta2'
-    gem 'activerecord-jdbcpostgresql-adapter', '>= 1.3.0.beta2'
+    gem 'activerecord-jdbcmysql-adapter', '~> 51.1'
+    gem 'activerecord-jdbcpostgresql-adapter', '~> 51.1'
     gem 'kramdown'
   end
 
@@ -21,6 +23,5 @@ group :development, :test do
   platforms :rbx do
     gem 'rubysl', '~> 2.0'
     gem 'rubinius-developer_tools'
-    gem 'json'
   end
 end

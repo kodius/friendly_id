@@ -1,7 +1,7 @@
 require "helper"
 
 
-class ObjectUtilsTest < Minitest::Test
+class ObjectUtilsTest < TestCaseClass
 
   include FriendlyId::Test
 
@@ -14,11 +14,13 @@ class ObjectUtilsTest < Minitest::Test
   end
 
   test "numeric strings are neither friendly nor unfriendly" do
-    assert_equal nil, "1".friendly_id?
-    assert_equal nil, "1".unfriendly_id?
+    assert_nil "1".friendly_id?
+    assert_nil "1".unfriendly_id?
   end
 
   test "ActiveRecord::Base instances should be unfriendly_ids" do
+    FriendlyId.mark_as_unfriendly(ActiveRecord::Base)
+
     model_class = Class.new(ActiveRecord::Base) do
       self.table_name = "authors"
     end

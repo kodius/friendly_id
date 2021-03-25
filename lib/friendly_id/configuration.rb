@@ -18,11 +18,19 @@ module FriendlyId
     # The module to use for finders
     attr_accessor :finder_methods
 
+    # The value used for the slugged association's dependent option
+    attr_accessor :dependent
+
+    # Route generation preferences
+    attr_accessor :routes
+
     def initialize(model_class, values = nil)
+      @base           = nil
       @model_class    = model_class
       @defaults       = {}
       @modules        = []
       @finder_methods = FriendlyId::FinderMethods
+      self.routes = :friendly
       set values
     end
 
@@ -40,8 +48,8 @@ module FriendlyId
     #
     # @param [#to_s,Module] modules Arguments should be Modules, or symbols or
     #   strings that correspond with the name of an addon to use with FriendlyId.
-    #   By default FriendlyId provides `:slugged`, `:history`, `:simple_i18n`,
-    #   and `:scoped`.
+    #   By default FriendlyId provides `:slugged`, `:finders`, `:history`,
+    #   `:reserved`, `:simple_i18n`, and `:scoped`.
     def use(*modules)
       modules.to_a.flatten.compact.map do |object|
         mod = get_module(object)

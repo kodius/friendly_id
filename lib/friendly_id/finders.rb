@@ -76,17 +76,14 @@ for models that use FriendlyId with something similar to the following:
     def self.setup(model_class)
       model_class.instance_eval do
         relation.class.send(:include, friendly_id_config.finder_methods)
-        if ActiveRecord::VERSION::MAJOR == 4 && ActiveRecord::VERSION::MINOR == 2
+        if (ActiveRecord::VERSION::MAJOR == 4 && ActiveRecord::VERSION::MINOR == 2) || ActiveRecord::VERSION::MAJOR >= 5
           model_class.send(:extend, friendly_id_config.finder_methods)
         end
       end
-    end
-
-    def self.included(model_class)
-      model_class.extend(ClassMethods)
 
       # Support for friendly finds on associations for Rails 4.0.1 and above.
       if ::ActiveRecord.const_defined?('AssociationRelation')
+        model_class.extend(ClassMethods)
         association_relation_delegate_class = model_class.relation_delegate_class(::ActiveRecord::AssociationRelation)
         association_relation_delegate_class.send(:include, model_class.friendly_id_config.finder_methods)
       end

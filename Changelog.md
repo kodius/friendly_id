@@ -1,7 +1,82 @@
 # FriendlyId Changelog
 
-We would like to think our many {file:Contributors contributors} for
+We would like to think our many [contributors](https://github.com/norman/friendly_id/graphs/contributors) for
 suggestions, ideas and improvements to FriendlyId.
+
+## Unreleased
+
+* SimpleI18n: Handle regional locales ([#965](https://github.com/norman/friendly_id/pull/965))
+* Fix: "unknown column" exception ([#943](https://github.com/norman/friendly_id/pull/943))
+
+## 5.4.2 (2021-01-07)
+
+* Fix: Set slug before save if needed ([#948](https://github.com/norman/friendly_id/pull/948))
+* Revert "Make `first_by_friendly_id` case insensitive using `downcase`" ([#951](https://github.com/norman/friendly_id/pull/951))
+
+## 5.4.1 (2020-11-06)
+
+* Fix unexpected `:slug` error on valid, unpersisted model ([#952](https://github.com/norman/friendly_id/pull/952))
+
+## 5.4.0 (2020-08-14)
+
+* Fix Ruby 2.7 keyword params deprecation warning ([#939](https://github.com/norman/friendly_id/pull/939))
+* Fix Slug Validation in `unset_slug_if_invalid` ([#938](https://github.com/norman/friendly_id/pull/938))
+* Make `first_by_friendly_id` case insensitive using `downcase` ([#787](https://github.com/norman/friendly_id/pull/787))
+* Use `destroy_all` rather than `delete_all` when creating historical slugs ([#924](https://github.com/norman/friendly_id/pull/924))
+* Set required ruby version to `>= 2.1.0` ([#923](https://github.com/norman/friendly_id/pull/923))
+* Avoid using deprecated `update_attributes` ([#922](https://github.com/norman/friendly_id/pull/922))
+
+## 5.3.0 (2019-09-25)
+
+* Record history when scope changes but slug does not ([#916](https://github.com/norman/friendly_id/pull/916))
+* Add support for Rails 6 ([#897](https://github.com/norman/friendly_id/pull/897))
+
+## 5.2.5 (2018-12-30)
+
+* Pass all possible parameters to ActiveRecord::RecordNotFound.new when raising the exception ([#890](https://github.com/norman/friendly_id/pull/890))
+* Use composite index for queries by sluggable ([#882](https://github.com/norman/friendly_id/pull/882))
+* Scoped: generate new slug if scope changed ([#878](https://github.com/norman/friendly_id/pull/878))
+* Fix History + SequentiallySlugged issues ([#877](https://github.com/norman/friendly_id/pull/877))
+* Support scoped with STI ([#745](https://github.com/norman/friendly_id/pull/745))
+* Fix exists? to behave the same as find for numeric slugs ([#875](https://github.com/norman/friendly_id/pull/875))
+* Remove dirty tracking code from to_param ([#867](https://github.com/norman/friendly_id/pull/867))
+
+## 5.2.4 (2018-04-24)
+
+* Fix compatibility with Rails versions 4.0 -> 5.2. ([#863](https://github.com/norman/friendly_id/pull/863)).
+* Refactor `History::FinderMethods` to use base implementation. ([#853](https://github.com/norman/friendly_id/pull/853)).
+* Defer loading of ActiveRecord to avoid config issues. ([#852](https://github.com/norman/friendly_id/pull/852)).
+* Ensure compatibility with paranoid deletion libraries. ([#838](https://github.com/norman/friendly_id/pull/838)).
+* Add treat_reserved_as_conflict option to initializer ([#847](https://github.com/norman/friendly_id/pull/847)).
+
+## 5.2.3 (2017-09-22)
+
+* Added option to treat reserved words as conflicts ([#831](https://github.com/norman/friendly_id/pull/831)).
+
+## 5.2.2 (2017-09-13)
+
+* Prevent warning on db:migrate in Rails 5.1 ([#826](https://github.com/norman/friendly_id/pull/826)).
+* Allow to set size limit for slug ([#809](https://github.com/norman/friendly_id/pull/809)).
+* Update specs and drop support for ruby 2.0.0 ([#824](https://github.com/norman/friendly_id/pull/824)).
+
+## 5.2.1 (2017-04-09)
+
+* Change ActiveRecord::Base to ApplicationRecord ([#782](https://github.com/norman/friendly_id/pull/782)).
+* Refactor `Candidates#each` method. ([#773](https://github.com/norman/friendly_id/pull/773)).
+* Assign to configured slug column, not 'slug' when validation fails. ([#779](https://github.com/norman/friendly_id/pull/779)).
+* Fix sequential slugs when using History. ([#774](https://github.com/norman/friendly_id/pull/774)).
+
+## 5.2.0 (2016-12-01)
+
+* Add sequential slug module for FriendlyId 4.x-style sequential slugs. ([#644](https://github.com/norman/friendly_id/pull/644)).
+* Make Candidates#each iterable without block ([#651](https://github.com/norman/friendly_id/pull/651)).
+* Ensure slug history prefers the record that most recently used the slug ([#663](https://github.com/norman/friendly_id/pull/663)).
+* Don't calculate all changes just to check if the param field has changed ([#667](https://github.com/norman/friendly_id/pull/667)).
+* Don't set or change slug when unrelated validation failures block the record from being saved ([#642](https://github.com/norman/friendly_id/issues/642)).
+* Fix order dependence bug between history and finders modules ([#718](https://github.com/norman/friendly_id/pull/718))
+* Added ability to conditionally turn off `:dependent => :destroy` on FriendlyId::Slugs([#724](https://github.com/norman/friendly_id/pull/724))
+* Add support for Rails 5. ([#728](https://github.com/norman/friendly_id/pull/728))
+* Allow per-model conditional disabling of friendly path generation using a :routes option to friendly_id ([#735](https://github.com/norman/friendly_id/pull/735))
 
 ## 5.1.0 (2015-01-15)
 
@@ -96,7 +171,7 @@ suggestions, ideas and improvements to FriendlyId.
 * `find` no longer falls back to super unless id is fully numeric string (Norman Clarke).
 * Default sequence separator is now '-' rather than '--'.
 * Support for Globalize has been removed until Globalize supports Rails 4.
-* Removed upport for Ruby < 1.9.3 and Rails < 4.0.
+* Removed support for Ruby < 1.9.3 and Rails < 4.0.
 
 ## 4.0.10.1 (2013-08-20)
 

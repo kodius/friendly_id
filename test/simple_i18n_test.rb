@@ -1,6 +1,6 @@
 require "helper"
 
-class SimpleI18nTest < Minitest::Test
+class SimpleI18nTest < TestCaseClass
   include FriendlyId::Test
 
   class Journalist < ActiveRecord::Base
@@ -15,12 +15,16 @@ class SimpleI18nTest < Minitest::Test
   test "friendly_id should return the current locale's slug" do
     journalist = Journalist.new(:name => "John Doe")
     journalist.slug_es = "juan-fulano"
+    journalist.slug_fr_ca = "jean-dupont"
     journalist.valid?
     I18n.with_locale(I18n.default_locale) do
       assert_equal "john-doe", journalist.friendly_id
     end
     I18n.with_locale(:es) do
       assert_equal "juan-fulano", journalist.friendly_id
+    end
+    I18n.with_locale(:"fr-CA") do
+      assert_equal "jean-dupont", journalist.friendly_id
     end
   end
 
@@ -88,17 +92,17 @@ class SimpleI18nTest < Minitest::Test
     end
   end
 
-  class RegressionTest < Minitest::Test
+  class RegressionTest < TestCaseClass
     include FriendlyId::Test
 
-    test "should not overwrite other locale's slugs on update_attributes" do
+    test "should not overwrite other locale's slugs on update" do
       transaction do
         journalist = Journalist.create!(:name => "John Smith")
         journalist.set_friendly_id("Juan Fulano", :es)
         journalist.save!
         assert_equal "john-smith", journalist.to_param
         journalist.slug = nil
-        journalist.update_attributes :name => "Johnny Smith"
+        journalist.update :name => "Johnny Smith"
         assert_equal "johnny-smith", journalist.to_param
         I18n.with_locale(:es) do
           assert_equal "juan-fulano", journalist.to_param
@@ -107,10 +111,16 @@ class SimpleI18nTest < Minitest::Test
     end
   end
 
-  class ConfigurationTest < Minitest::Test
+  class ConfigurationTest < TestCaseClass
     test "should add locale to slug column for a non-default locale" do
       I18n.with_locale :es do
         assert_equal "slug_es", Journalist.friendly_id_config.slug_column
+      end
+    end
+
+    test "should add locale to slug column for a locale with a region subtag" do
+      I18n.with_locale :"fr-CA" do
+        assert_equal "slug_fr_ca", Journalist.friendly_id_config.slug_column
       end
     end
 

@@ -2,9 +2,12 @@ source 'https://rubygems.org'
 
 gemspec
 
+gem 'rake'
+
 group :development, :test do
   platforms :ruby do
     gem 'byebug'
+    gem 'pry'
   end
 
   platforms :jruby do

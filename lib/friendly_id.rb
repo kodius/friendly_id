@@ -1,4 +1,5 @@
 # encoding: utf-8
+require 'active_record'
 require "friendly_id/base"
 require "friendly_id/object_utils"
 require "friendly_id/configuration"
@@ -42,26 +43,14 @@ with numeric ids:
 =end
 module FriendlyId
 
-  autoload :History,    "friendly_id/history"
-  autoload :Slug,       "friendly_id/slug"
-  autoload :SimpleI18n, "friendly_id/simple_i18n"
-  autoload :Reserved,   "friendly_id/reserved"
-  autoload :Scoped,     "friendly_id/scoped"
-  autoload :Slugged,    "friendly_id/slugged"
-  autoload :Finders,    "friendly_id/finders"
-
-  # Instances of these classes will never be considered a friendly id.
-  # @see FriendlyId::ObjectUtils#friendly_id
-  UNFRIENDLY_CLASSES = [
-    ActiveRecord::Base,
-    Array,
-    FalseClass,
-    Hash,
-    NilClass,
-    Numeric,
-    Symbol,
-    TrueClass
-  ]
+  autoload :History,             "friendly_id/history"
+  autoload :Slug,                "friendly_id/slug"
+  autoload :SimpleI18n,          "friendly_id/simple_i18n"
+  autoload :Reserved,            "friendly_id/reserved"
+  autoload :Scoped,              "friendly_id/scoped"
+  autoload :Slugged,             "friendly_id/slugged"
+  autoload :Finders,             "friendly_id/finders"
+  autoload :SequentiallySlugged, "friendly_id/sequentially_slugged"
 
   # FriendlyId takes advantage of `extended` to do basic model setup, primarily
   # extending {FriendlyId::Base} to add {FriendlyId::Base#friendly_id

@@ -19,7 +19,7 @@ class Novelist < ActiveRecord::Base
   end
 end
 
-class SluggedTest < Minitest::Test
+class SluggedTest < TestCaseClass
 
   include FriendlyId::Test
   include FriendlyId::Test::Shared::Core
@@ -92,9 +92,130 @@ class SluggedTest < Minitest::Test
     end
   end
 
+  test "should set slug on create if unrelated validations fail" do
+    klass = Class.new model_class do
+      validates_presence_of :active
+      friendly_id :name, :use => :slugged
+
+      def self.name
+        "Journalist"
+      end
+    end
+
+    transaction do
+      instance = klass.new :name => 'foo'
+      refute instance.save
+      refute instance.valid?
+      assert_equal 'foo', instance.slug
+    end
+  end
+
+  test "should not set slug on create if slug validation fails" do
+    klass = Class.new model_class do
+      validates_presence_of :active
+      validates_length_of :slug, :minimum => 2
+      friendly_id :name, :use => :slugged
+
+      def self.name
+        "Journalist"
+      end
+    end
+
+    transaction do
+      instance = klass.new :name => 'x'
+      refute instance.save
+      refute instance.valid?
+      assert_nil instance.slug
+    end
+  end
+
+  test "should set slug on create if unrelated validations fail with custom slug_column" do
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = 'authors'
+      extend FriendlyId
+      validates_presence_of :active
+      friendly_id :name, :use => :slugged, :slug_column => :subdomain
+
+      def self.name
+        "Author"
+      end
+    end
+
+    transaction do
+      instance = klass.new :name => 'foo'
+      refute instance.save
+      refute instance.valid?
+      assert_equal 'foo', instance.subdomain
+    end
+  end
+
+  test "should not set slug on create if custom slug column validations fail" do
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = 'authors'
+      extend FriendlyId
+      validates_length_of :subdomain, :minimum => 2
+      friendly_id :name, :use => :slugged, :slug_column => :subdomain
+
+      def self.name
+        "Author"
+      end
+    end
+
+    transaction do
+      instance = klass.new :name => 'x'
+      refute instance.save
+      refute instance.valid?
+      assert_nil instance.subdomain
+    end
+  end
+
+  test "should keep new slug on save if unrelated validations fail" do
+    klass = Class.new model_class do
+      validates_presence_of :active
+      friendly_id :name, :use => :slugged
+
+      def self.name
+        "Journalist"
+      end
+    end
+
+    transaction do
+      instance = klass.new :name => 'foo', :active => true
+      assert instance.save
+      assert instance.valid?
+      instance.name = 'foobar'
+      instance.slug = nil
+      instance.active = nil
+      refute instance.save
+      refute instance.valid?
+      assert_equal 'foobar', instance.slug
+    end
+  end
+
+  test "should not update slug on save if slug validations fail" do
+    klass = Class.new model_class do
+      validates_length_of :slug, :minimum => 2
+      friendly_id :name, :use => :slugged
+
+      def self.name
+        "Journalist"
+      end
+    end
+
+    transaction do
+      instance = klass.new :name => 'foo', :active => true
+      assert instance.save
+      assert instance.valid?
+      instance.name = 'x'
+      instance.slug = nil
+      instance.active = nil
+      refute instance.save
+      assert_equal 'foo', instance.slug
+    end
+  end
 end
 
-class SlugGeneratorTest < Minitest::Test
+class SlugGeneratorTest < TestCaseClass
 
   include FriendlyId::Test
 
@@ -158,7 +279,7 @@ class SlugGeneratorTest < Minitest::Test
 
 end
 
-class SlugSeparatorTest < Minitest::Test
+class SlugSeparatorTest < TestCaseClass
 
   include FriendlyId::Test
 
@@ -210,7 +331,32 @@ class SlugSeparatorTest < Minitest::Test
 
 end
 
-class DefaultScopeTest < Minitest::Test
+class SlugLimitTest < TestCaseClass
+
+  include FriendlyId::Test
+
+  class Journalist < ActiveRecord::Base
+    extend FriendlyId
+    friendly_id :name, :use => :slugged, :slug_limit => 40
+  end
+
+  def model_class
+    Journalist
+  end
+
+  test "should limit slug size" do
+    transaction do
+      m1 = model_class.create! :name => 'a' * 50
+      assert_equal m1.slug, 'a' * 40
+      m2 = model_class.create! :name => m1.name
+      m2.save!
+      # "aaa-<uid>"
+      assert_match(/\Aa{3}\-/, m2.slug)
+    end
+  end
+end
+
+class DefaultScopeTest < TestCaseClass
 
   include FriendlyId::Test
 
@@ -235,7 +381,7 @@ class DefaultScopeTest < Minitest::Test
 
 end
 
-class UuidAsPrimaryKeyFindTest < Minitest::Test
+class UuidAsPrimaryKeyFindTest < TestCaseClass
 
   include FriendlyId::Test
 
@@ -284,7 +430,7 @@ class UuidAsPrimaryKeyFindTest < Minitest::Test
 
 end
 
-class UnderscoreAsSequenceSeparatorRegressionTest < Minitest::Test
+class UnderscoreAsSequenceSeparatorRegressionTest < TestCaseClass
 
   include FriendlyId::Test
 
@@ -308,7 +454,7 @@ class UnderscoreAsSequenceSeparatorRegressionTest < Minitest::Test
 end
 
 # https://github.com/norman/friendly_id/issues/148
-class FailedValidationAfterUpdateRegressionTest < Minitest::Test
+class FailedValidationAfterUpdateRegressionTest < TestCaseClass
 
   include FriendlyId::Test
 
@@ -331,4 +477,171 @@ class FailedValidationAfterUpdateRegressionTest < Minitest::Test
     end
   end
 
+end
+
+# https://github.com/norman/friendly_id/issues/947
+class GeneratingSlugWithValidationSkippedTest < TestCaseClass
+
+  include FriendlyId::Test
+
+  class Journalist < ActiveRecord::Base
+    extend FriendlyId
+    friendly_id :name, :use => :slugged
+  end
+
+  test "should generate slug when skipping validation" do
+    transaction do
+      m1 = Journalist.new
+      m1.name = 'Bob Timesletter'
+      m1.save(validate: false)
+      assert_equal 'bob-timesletter', m1.slug
+    end
+  end
+
+  test "should generate slug when #valid? called" do
+    transaction do
+      m1 = Journalist.new
+      m1.name = 'Bob Timesletter'
+      m1.valid?
+      m1.save(validate: false)
+      assert_equal 'bob-timesletter', m1.slug
+    end
+  end
+
+end
+
+class ToParamTest < TestCaseClass
+
+  include FriendlyId::Test
+
+  class Journalist < ActiveRecord::Base
+    extend FriendlyId
+    validates_presence_of :active
+    validates_length_of :slug, :minimum => 2
+    friendly_id :name, :use => :slugged
+
+    attr_accessor :to_param_in_callback
+
+    after_save do
+      self.to_param_in_callback = to_param
+    end
+  end
+
+  test "to_param should return nil if record is unpersisted" do
+    assert_nil Journalist.new.to_param
+  end
+
+  test "to_param should return original slug if record failed validation" do
+    journalist = Journalist.new :name => 'Clark Kent', :active => nil
+    refute journalist.save
+    assert_equal 'clark-kent', journalist.to_param
+  end
+
+  test "to_param should clear slug attributes if slug attribute fails validation" do
+    journalist = Journalist.new :name => 'x', :active => true
+    refute journalist.save
+    assert_nil journalist.to_param
+  end
+
+  test "to_param should clear slug attribute if slug attribute fails validation and unrelated validation fails" do
+    journalist = Journalist.new :name => 'x', :active => nil
+    refute journalist.save
+    assert_nil journalist.to_param
+  end
+
+  test "to_param should use slugged attribute if record saved successfully" do
+    transaction do
+      journalist = Journalist.new :name => 'Clark Kent', :active => true
+      assert journalist.save
+      assert_equal 'clark-kent', journalist.to_param
+    end
+  end
+
+  test "to_param should use new slug if existing record changes but fails to save" do
+    transaction do
+      journalist = Journalist.new :name => 'Clark Kent', :active => true
+      assert journalist.save
+      journalist.name = 'Superman'
+      journalist.slug = nil
+      journalist.active = nil
+      refute journalist.save
+      assert_equal 'superman', journalist.to_param
+    end
+  end
+
+  test "to_param should use original slug if new slug attribute is not valid" do
+    transaction do
+      journalist = Journalist.new :name => 'Clark Kent', :active => true
+      assert journalist.save
+      journalist.name = 'x'
+      journalist.slug = nil
+      journalist.active = nil
+      refute journalist.save
+      assert_equal 'clark-kent', journalist.to_param
+    end
+  end
+
+  test "to_param should use new slug if existing record changes successfully" do
+    transaction do
+      journalist = Journalist.new :name => 'Clark Kent', :active => true
+      assert journalist.save
+      journalist.name = 'Superman'
+      journalist.slug = nil
+      assert journalist.save
+      assert_equal 'superman', journalist.to_param
+    end
+  end
+
+  test "to_param should use new slug within callbacks if new record is saved successfully" do
+    transaction do
+      journalist = Journalist.new :name => 'Clark Kent', :active => true
+      assert journalist.save
+      assert_equal 'clark-kent', journalist.to_param_in_callback, "value of to_param in callback should use the new slug value"
+    end
+  end
+
+  test "to_param should use new slug within callbacks if existing record changes successfully" do
+    transaction do
+      journalist = Journalist.new :name => 'Clark Kent', :active => true
+      assert journalist.save
+      assert journalist.valid?
+      journalist.name = 'Superman'
+      journalist.slug = nil
+      assert journalist.save, "save should be successful"
+      assert_equal 'superman', journalist.to_param_in_callback, "value of to_param in callback should use the new slug value"
+    end
+  end
+
+end
+
+class ConfigurableRoutesTest < TestCaseClass
+  include FriendlyId::Test
+
+  class Article < ActiveRecord::Base
+    extend FriendlyId
+
+    friendly_id :name, :use => :slugged, :routes => :friendly
+  end
+
+  class Novel < ActiveRecord::Base
+    extend FriendlyId
+
+    friendly_id :name, :use => :slugged, :routes => :default
+  end
+
+  test "to_param should return a friendly id when the routes option is set to :friendly" do
+    transaction do
+      article = Article.create! :name => "Titanic Hits; Iceberg Sinks"
+
+      assert_equal "titanic-hits-iceberg-sinks", article.to_param
+    end
+  end
+
+  test "to_param should return the id when the routes option is set to anything but friendly" do
+    transaction do
+      novel = Novel.create! :name => "Don Quixote"
+
+      assert_equal novel.id.to_s, novel.to_param
+    end
+  end
 end

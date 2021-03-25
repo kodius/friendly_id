@@ -12,10 +12,22 @@ if ENV['COVERALLS'] || ENV['COVERAGE']
   end
 end
 
-require 'minitest'
+begin
+  require 'minitest'
+rescue LoadError
+  require 'minitest/unit'
+end
+
+begin
+  TestCaseClass = MiniTest::Test
+rescue NameError
+  TestCaseClass = MiniTest::Unit::TestCase
+end
+
 require "mocha/setup"
 require "active_record"
 require 'active_support/core_ext/time/conversions'
+require 'erb'
 
 I18n.enforce_available_locales = false
 
@@ -27,11 +39,20 @@ if ENV["LOG"]
   ActiveRecord::Base.logger = Logger.new($stdout)
 end
 
+if ActiveSupport::VERSION::STRING >= '4.2'
+  ActiveSupport.test_order = :random
+end
+
 module FriendlyId
   module Test
 
     def self.included(base)
-      Minitest.autorun
+      if Minitest.respond_to?(:autorun)
+        Minitest.autorun
+      else
+        require 'minitest/autorun'
+      end
+    rescue LoadError
     end
 
     def transaction
@@ -49,7 +70,6 @@ module FriendlyId
 
       def connect
         version = ActiveRecord::VERSION::STRING
-        driver  = FriendlyId::Test::Database.driver
         engine  = RUBY_ENGINE rescue "ruby"
 
         ActiveRecord::Base.establish_connection config[driver]
@@ -66,11 +86,17 @@ module FriendlyId
       end
 
       def config
-        @config ||= YAML::load(File.open(File.expand_path("../databases.yml", __FILE__)))
+        @config ||= YAML::load(
+          ERB.new(
+            File.read(File.expand_path("../databases.yml", __FILE__))
+          ).result
+        )
       end
 
       def driver
-        (ENV["DB"] or "sqlite3").downcase
+        _driver = ENV.fetch('DB', 'sqlite3').downcase
+        _driver = "postgres" if %w(postgresql pg).include?(_driver)
+        _driver
       end
 
       def in_memory?
